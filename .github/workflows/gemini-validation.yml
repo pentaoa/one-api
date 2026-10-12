@@ -1,0 +1,37 @@
+name: Gemini system instruction validation
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/gemini-system-instructions
+          fetch-depth: 2
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Formatting
+        run: test -z "$(gofmt -l relay/adaptor/gemini/constants.go relay/adaptor/gemini/main.go relay/adaptor/gemini/main_test.go)"
+      - name: Baseline regression
+        shell: bash
+        run: |
+          cp relay/adaptor/gemini/main.go /tmp/fixed-main.go
+          cp relay/adaptor/gemini/constants.go /tmp/fixed-constants.go
+          git show HEAD^:relay/adaptor/gemini/main.go > relay/adaptor/gemini/main.go
+          git show HEAD^:relay/adaptor/gemini/constants.go > relay/adaptor/gemini/constants.go
+          set +e
+          go test ./relay/adaptor/gemini -run '^TestConvertRequestSystemInstruction$' -count=1 -v > /tmp/baseline.log 2>&1
+          result=$?
+          set -e
+          cat /tmp/baseline.log
+          cp /tmp/fixed-main.go relay/adaptor/gemini/main.go
+          cp /tmp/fixed-constants.go relay/adaptor/gemini/constants.go
+          test "$result" -ne 0
+          grep -q 'conversation =' /tmp/baseline.log
+      - name: Gemini regressions
+        run: go test -race ./relay/adaptor/gemini -count=1 -v
+      - name: Full suite
+        run: go test ./... -count=1 -timeout=10m
