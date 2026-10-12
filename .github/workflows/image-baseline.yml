@@ -1,0 +1,24 @@
+name: Baseline image fixture check
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8df4a2670b98266bd287c698243fff327d9748cf
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Check unchanged image fixture
+        shell: bash
+        run: |
+          set +e
+          go test ./common/image -run '^TestDecode$' -count=1 -v > /tmp/image.log 2>&1
+          result=$?
+          set -e
+          cat /tmp/image.log
+          test "$result" -ne 0
+          grep -q 'image: unknown format' /tmp/image.log
